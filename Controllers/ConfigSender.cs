@@ -104,6 +104,18 @@ namespace Controllers
                     var message = update.Message;
                     if (message != null && message.From != null)
                     {
+                        var totalWait = SpammCheck.Check(update);
+
+                        if (totalWait != "ok")
+                        {
+                            await Bot.SendTextMessageAsync(
+                                update.Message.From!.Id,
+                                $"*یه‌کم آروم‌تر \ud83d\ude42\n بعد از {totalWait} ثانیه می‌تونی مجددا درخواست بفرستی.*",
+                                replyToMessageId: update.Message.MessageId,
+                                parseMode: ParseMode.Markdown,
+                                cancellationToken: arg3);
+                            return;
+                        }
                         userIds.Add(message.From.Id);
                         await SaveUserIds();
 
@@ -137,6 +149,19 @@ namespace Controllers
 
                 if (update.Type == UpdateType.CallbackQuery)
                 {
+                      var totalWait = SpammCheck.Check(update);
+
+                            if (totalWait != "ok")
+                            {
+                                await Bot.AnswerCallbackQueryAsync(
+                                    update.CallbackQuery.Id,
+                                    $"یه‌کم آروم‌تر \ud83d\ude42\n بعد از {totalWait} ثانیه می‌تونی مجددا درخواست بفرستی.",
+                                    true,
+                                    cancellationToken: arg3
+                                );
+
+                                return;
+                            }
                     var callbackQuery = update.CallbackQuery;
                     string directoryPath = null;
 

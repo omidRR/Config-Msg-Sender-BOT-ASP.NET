@@ -1,147 +1,71 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
+using System;
+using Telegram.Bot.Types;
 
-namespace myclass
+public class SpammCheck
 {
+    private static Dictionary<string, DateTime> data = new Dictionary<string, DateTime>();
+    private static Dictionary<string, DateTime> banData = new Dictionary<string, DateTime>();
+    private const int antifloodSeconds = 2; // The time window for counting the messages
+    private const int banSeconds = 1; // The duration of the ban
 
-    public static partial class UtilityTelegram
+    public static string Check(Update update)
     {
-        private static Dictionary<long, DateTime> UsersLastMessage = new Dictionary<long, DateTime>();
-        private static Dictionary<long, DateTime> UsersLastMessage2 = new Dictionary<long, DateTime>();
-        private static Dictionary<long, DateTime> UsersLastMessage3 = new Dictionary<long, DateTime>();
-        private static Dictionary<long, DateTime> UsersLastMessage4 = new Dictionary<long, DateTime>();
-        private static Dictionary<long, DateTime> UsersLastMessage5 = new Dictionary<long, DateTime>();
-        //  private static int ToWaitSeconds = 5;
-        public static StringBuilder SpammChack(Telegram.Bot.Types.Message message, long toWaitSeconds)
+        try
         {
-            StringBuilder result = new StringBuilder();
-            long senderId = message.From!.Id;
-            if (UsersLastMessage.TryGetValue(senderId, out DateTime lastMessage))
+            long chatId;
+            long userId;
+            if (update.Message != null)
             {
-                if ((message.Date - lastMessage).TotalSeconds < toWaitSeconds)
-                {
-                    result.Append($"{toWaitSeconds - (message.Date - lastMessage).TotalSeconds}");
-                }
-                else
-                {
-                    UsersLastMessage[senderId] = message.Date;
-                    result.Append("ok");
-                }
-
+                chatId = update.Message.Chat.Id;
+                userId = update.Message.From.Id;
+            }
+            else if (update.CallbackQuery != null)
+            {
+                chatId = update.CallbackQuery.Message.Chat.Id;
+                userId = update.CallbackQuery.From.Id;
             }
             else
             {
-                UsersLastMessage.Add(senderId, message.Date);
-                result.Append("ok");
+                return "invalid update";
             }
 
-            return result;
+            var key = $"{chatId}:{userId}";
+
+            if (banData.ContainsKey(key))
+            {
+                var elapsedSeconds = (DateTime.UtcNow - banData[key]).TotalSeconds;
+                if (elapsedSeconds <= banSeconds)
+                {
+                    var remainingSeconds = Math.Ceiling(banSeconds - elapsedSeconds);
+                    return $"{remainingSeconds}";
+                }
+                else
+                {
+                    banData.Remove(key);
+                }
+            }
+
+            if (!data.ContainsKey(key))
+            {
+                data[key] = DateTime.UtcNow;
+                return "ok";
+            }
+
+            var timeSpan = DateTime.UtcNow - data[key];
+            if (timeSpan.TotalSeconds <= antifloodSeconds)
+            {
+                banData[key] = DateTime.UtcNow;
+                return $"{banSeconds}";
+            }
+
+            data[key] = DateTime.UtcNow;
+            return "ok";
         }
-
-        public static StringBuilder SpammChack2(Telegram.Bot.Types.CallbackQuery message, long toWaitSeconds)
+        catch (Exception ex)
         {
-            StringBuilder result = new StringBuilder();
-            long senderId = message.Message!.Chat!.Id;
-            if (UsersLastMessage2.TryGetValue(senderId, out DateTime lastMessage))
-            {
-                if ((DateTime.Now - lastMessage).Seconds < toWaitSeconds)
-                {
-                    result.Append($"{toWaitSeconds - (DateTime.Now - lastMessage).Seconds}");
-                }
-                else
-                {
-                    UsersLastMessage2[senderId] = DateTime.Now;
-                    result.Append("ok");
-                }
-
-            }
-            else
-            {
-                UsersLastMessage2.Add(senderId, DateTime.Now);
-                result.Append("ok");
-            }
-
-            return result;
-        }
-        //shisheget file
-        public static StringBuilder SpammChack3(Telegram.Bot.Types.CallbackQuery message, long toWaitSeconds)
-        {
-            StringBuilder result = new StringBuilder();
-            long senderId = message.Message!.Chat!.Id;
-            if (UsersLastMessage3.TryGetValue(senderId, out DateTime lastMessage))
-            {
-                if ((DateTime.Now - lastMessage).Seconds < toWaitSeconds)
-                {
-                    result.Append($"{toWaitSeconds - (DateTime.Now - lastMessage).Seconds}");
-                }
-                else
-                {
-                    UsersLastMessage3[senderId] = DateTime.Now;
-                    result.Append("ok");
-                }
-
-            }
-            else
-            {
-                UsersLastMessage3.Add(senderId, DateTime.Now);
-                result.Append("ok");
-            }
-
-            return result;
-        }
-        //zip
-        public static StringBuilder SpammChack4(Telegram.Bot.Types.CallbackQuery message, long toWaitSeconds)
-        {
-            StringBuilder result = new StringBuilder();
-            long senderId = message.Message!.Chat!.Id;
-            if (UsersLastMessage4.TryGetValue(senderId, out DateTime lastMessage))
-            {
-                if ((DateTime.Now - lastMessage).Seconds < toWaitSeconds)
-                {
-                    result.Append($"{toWaitSeconds - (DateTime.Now - lastMessage).Seconds}");
-                }
-                else
-                {
-                    UsersLastMessage4[senderId] = DateTime.Now;
-                    result.Append("ok");
-                }
-
-            }
-            else
-            {
-                UsersLastMessage4.Add(senderId, DateTime.Now);
-                result.Append("ok");
-            }
-
-            return result;
-        }
-        //unzip
-        public static StringBuilder SpammChack5(Telegram.Bot.Types.CallbackQuery message, long toWaitSeconds)
-        {
-            StringBuilder result = new StringBuilder();
-            long senderId = message.Message!.Chat!.Id;
-            if (UsersLastMessage5.TryGetValue(senderId, out DateTime lastMessage))
-            {
-                if ((DateTime.Now - lastMessage).Seconds < toWaitSeconds)
-                {
-                    result.Append($"{toWaitSeconds - (DateTime.Now - lastMessage).Seconds}");
-                }
-                else
-                {
-                    UsersLastMessage5[senderId] = DateTime.Now;
-                    result.Append("ok");
-                }
-
-            }
-            else
-            {
-                UsersLastMessage5.Add(senderId, DateTime.Now);
-                result.Append("ok");
-            }
-
-            return result;
+            // Here you can log the exception or rethrow it
+            return $"Error: {ex.Message}";
         }
     }
-
 }
