@@ -42,6 +42,10 @@ namespace Controllers
         public static async Task<bool> CheckMandatoryChannelMembership(Message message, ITelegramBotClient bot, IConfiguration configuration, bool isCallbackQuery = false, string callbackQueryId = null)
         {
             var mandatoryChannels = configuration.GetSection("TelegramSettings:MandatoryChannels").Get<List<string>>();
+            if (mandatoryChannels is null)
+            {
+                return false;
+            }
             var nonMemberChannels = new List<string>();
             var adminId = configuration["TelegramSettings:AdminID"];
 
