@@ -6,8 +6,8 @@ public class SpammCheck
 {
     private static Dictionary<string, DateTime> data = new Dictionary<string, DateTime>();
     private static Dictionary<string, DateTime> banData = new Dictionary<string, DateTime>();
-    private const int antifloodSeconds = 2; // The time window for counting the messages
-    private const int banSeconds = 1; // The duration of the ban
+    private const int antifloodSeconds = 1; // The time window for counting the messages
+    private const double banSeconds = 0.5; // The duration of the ban
 
     public static string Check(Update update)
     {

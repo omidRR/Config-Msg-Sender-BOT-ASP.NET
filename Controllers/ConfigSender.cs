@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -26,7 +27,7 @@ namespace Controllers
         static string botjson;
         static HashSet<long> userIds = new HashSet<long>();
 
-        private readonly IConfiguration _configuration;
+        private static IConfiguration _configuration;
         private static string _adminId;
 
         public ConfigSender(IConfiguration configuration)
@@ -36,6 +37,70 @@ namespace Controllers
             botidme = Bot.GetMeAsync();
             botjson = JsonConvert.SerializeObject(botidme.Result, Formatting.Indented);
             _adminId = _configuration["TelegramSettings:AdminID"];
+        }
+        ///
+        public static async Task<bool> CheckMandatoryChannelMembership(Message message, ITelegramBotClient bot, IConfiguration configuration, bool isCallbackQuery = false, string callbackQueryId = null)
+        {
+            var mandatoryChannels = configuration.GetSection("TelegramSettings:MandatoryChannels").Get<List<string>>();
+            var nonMemberChannels = new List<string>();
+            var adminId = configuration["TelegramSettings:AdminID"];
+
+            foreach (var channel in mandatoryChannels)
+            {
+                try
+                {
+                    var member = await bot.GetChatMemberAsync(channel, message.From.Id);
+                    if (member.Status == ChatMemberStatus.Left || member.Status == ChatMemberStatus.Kicked)
+                    {
+                        nonMemberChannels.Add(channel);
+                    }
+                }
+                catch (ApiRequestException ex)
+                {
+                    if (ex.Message.Contains("Forbidden: bot was kicked from the channel chat"))
+                    {
+                        await bot.SendTextMessageAsync(adminId, $"ربات مدیر کانال زیر نیست: {channel}");
+                    }
+                    else
+                    {
+                        nonMemberChannels.Add(channel);
+                        await bot.SendTextMessageAsync(adminId, $"خطایی در هنگام بررسی عضویت در کانال رخ داد: {ex.Message}");
+                    }
+                }
+            }
+
+            if (nonMemberChannels.Any())
+            {
+                var inlineKeyboard = new InlineKeyboardMarkup(nonMemberChannels.Select((channel, index) =>
+                    new[] { InlineKeyboardButton.WithUrl($"{index + 1} - {channel}", $"https://t.me/{channel.Substring(1)}") }));
+                // Convert the non-member channels to a string
+                var nonMemberChannelsString = string.Join("\n", nonMemberChannels);
+                // Use AnswerCallbackQueryAsync if the input is a CallbackQuery, else use SendTextMessageAsync
+                if (isCallbackQuery)
+                {
+                    await bot.AnswerCallbackQueryAsync(
+                        callbackQueryId,
+                        "\ud83d\udcdb برای دریافت کانفیگ لطفا\u064b عضو کانال ما شوید\u2b07\ufe0f\n" + nonMemberChannelsString,
+                        true,
+                        null,
+                        30);
+                    await bot.SendTextMessageAsync(
+                        chatId: message.Chat.Id,
+                        text: "\ud83d\udcdb برای دریافت کانفیگ لطفا\u064b عضو کانال ما شوید:",
+                        replyMarkup: inlineKeyboard);
+                }
+                else
+                {
+                    await bot.SendTextMessageAsync(
+                        chatId: message.Chat.Id,
+                        text: "\ud83d\udcdb برای دریافت کانفیگ لطفا\u064b عضو کانال ما شوید:",
+                        replyMarkup: inlineKeyboard);
+                }
+
+                return true;
+            }
+
+            return false;
         }
         [Obsolete]
         [HttpGet]
@@ -104,6 +169,10 @@ namespace Controllers
                     var message = update.Message;
                     if (message != null && message.From != null)
                     {
+                        if (await CheckMandatoryChannelMembership(message, Bot, _configuration))
+                        {
+                            return;
+                        }
                         var totalWait = SpammCheck.Check(update);
 
                         if (totalWait != "ok")
@@ -150,8 +219,7 @@ namespace Controllers
                 if (update.Type == UpdateType.CallbackQuery)
                 {
                       var totalWait = SpammCheck.Check(update);
-
-                            if (totalWait != "ok")
+                      if (totalWait != "ok")
                             {
                                 await Bot.AnswerCallbackQueryAsync(
                                     update.CallbackQuery.Id,
@@ -162,7 +230,18 @@ namespace Controllers
 
                                 return;
                             }
-                    var callbackQuery = update.CallbackQuery;
+
+                      var callbackQuery = update.CallbackQuery;
+                      var dummyMessage = new Message
+                      {
+                          From = callbackQuery.From,
+                          Chat = callbackQuery.Message.Chat
+                      };
+                    // Check if the user is a member of the mandatory channels when they click an inline button
+                    if (await CheckMandatoryChannelMembership(dummyMessage, Bot, _configuration, true, callbackQuery.Id))
+                    {
+                        return;
+                    }
                     string directoryPath = null;
 
                     switch (callbackQuery.Data)
@@ -175,11 +254,11 @@ namespace Controllers
                             {
                         new[] // first row
                         {
-                            InlineKeyboardButton.WithCallbackData("کانفیگ NapsternetV برای اندروید", "/get_inpv_files"),
+                            InlineKeyboardButton.WithCallbackData("کانفیگ NapsternetV برای IOS", "/get_inpv_files"),
                         },
                         new[] // second row
                         {
-                            InlineKeyboardButton.WithCallbackData("کانفیگ NapsternetV برای IOS", "/get_npv4_files"),
+                            InlineKeyboardButton.WithCallbackData("کانفیگ NapsternetV برای اندروید", "/get_npv4_files"),
                         },
                         new[] // third row
                         {
@@ -306,7 +385,7 @@ namespace Controllers
                 await Bot.SendTextMessageAsync(_adminId, $"Error in SendFilesFromDirectory: {ex.Message}");
             }
         }
-
+ 
         public static async Task SaveUserIds()
         {
             try
